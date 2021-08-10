@@ -47,6 +47,7 @@ type
     Data: Pointer; Size: Integer) of object;
     { Data contains the sent data and is released when the function returns }
   TCmdLineReceivedEvent = procedure(Sender: TObject; CmdLine: TStrings) of object;
+  TRejectionNotifyEvent = procedure(Sender: TObject; var AExitCode: Cardinal) of object;
 
   { TJvAppInstance encapsulates the TJclAppInstance class. To set a
     UniqueAppIdGuidStr you must call JclAppInst.JclAppInstances in the
@@ -64,7 +65,7 @@ type
     FOnUserNotify: TUserNotifyEvent;
     FOnDataAvailable: TDataAvailableEvent;
     FOnCmdLineReceived: TCmdLineReceivedEvent;
-    FOnRejected: TNotifyEvent;
+    FOnRejected: TRejectionNotifyEvent;
     FAutoActivate: Boolean;
     FMaxInstances: Integer;
     FActive: Boolean;
@@ -82,7 +83,7 @@ type
     procedure DoUserNotify(Param: Integer); virtual;
     procedure DoDataAvailable(Kind: TJvAppInstDataKind; Data: Pointer; Size: Integer); virtual;
     procedure DoCmdLineReceived(CmdLine: TStrings); virtual;
-    procedure DoRejected; virtual;
+    procedure DoRejected(var AExitCode: Cardinal); virtual;
     property Handle: THandle read FHandle;
   public
     constructor Create(AOwner: TComponent); override;
@@ -107,7 +108,7 @@ type
     property OnUserNotify: TUserNotifyEvent read FOnUserNotify write FOnUserNotify;
     property OnDataAvailable: TDataAvailableEvent read FOnDataAvailable write FOnDataAvailable;
     property OnCmdLineReceived: TCmdLineReceivedEvent read FOnCmdLineReceived write FOnCmdLineReceived;
-    property OnRejected: TNotifyEvent read FOnRejected write FOnRejected;
+    property OnRejected: TRejectionNotifyEvent read FOnRejected write FOnRejected;
   end;
 
 {$IFDEF UNITVERSIONING}
@@ -170,6 +171,8 @@ begin
 end;
 
 procedure TJvAppInstances.Check;
+var
+  LExitCode: Cardinal;
 begin
   if Active and not (csDesigning in ComponentState) then
     if MaxInstances > 0 then
@@ -177,7 +180,8 @@ begin
       begin
         if GetIsRemoteInstanceActive then
         begin
-          DoRejected;
+          LExitCode := 0;
+          DoRejected(LExitCode);
           if AutoActivate then
             AppInstances.SwitchTo(0);
           if SendCmdLine then
@@ -186,7 +190,7 @@ begin
           // As ExitProcess will prevent ANY finalization to occur, we free the
           // AppInstances object so that it can cleanup the process information
           AppInstances.Free;
-          ExitProcess(0);
+          ExitProcess(LExitCode);
         end;
       end;
 end;
@@ -222,10 +226,10 @@ begin
     FOnUserNotify(Self, Param);
 end;
 
-procedure TJvAppInstances.DoRejected;
+procedure TJvAppInstances.DoRejected(var AExitCode: Cardinal);
 begin
   if Assigned(FOnRejected) then
-    FOnRejected(Self);
+    FOnRejected(Self, AExitCode);
 end;
 
 function TJvAppInstances.GetAppInstances: TJclAppInstances;
