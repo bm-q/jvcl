@@ -4320,8 +4320,7 @@ begin
     ColLineWidth := Ord(dgColLines in Options) * GridLineWidth;
     AvailableWidth := ClientWidth;
     if (dgIndicator in Options) then
-      //Use ColWidths[0] instead of IndicatorWidth (real width may change in some condition)
-      Dec(AvailableWidth, ColWidths[0] + ColLineWidth);
+      Dec(AvailableWidth, PPIScale(Self, IndicatorWidth) + ColLineWidth);
     TotalColWidth := 0;
     if FixedCols = 0 then
       BeginLayout;
