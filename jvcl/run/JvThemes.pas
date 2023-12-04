@@ -1372,6 +1372,10 @@ procedure DrawGlassableText(DC: HDC; const Text: string; var TextRect: TRect; Te
   PaintOnGlass: Boolean = False);
 {$IFDEF COMPILER11_UP}
 var
+  {$IFDEF COMPILER16_UP}
+  StyleTextOptions: TStyleTextOptions;
+  TextFormat: TTextFormat;
+  {$ENDIF COMPILER16_UP}
   Options: TDTTOpts;
   {$IFDEF COMPILER11}
   S: WideString;
@@ -1380,48 +1384,53 @@ var
 begin
   {$IFDEF COMPILER11_UP}
   if StyleServices.Enabled and JclCheckWinVersion(6, 0) then
-  begin
-    FillChar(Options, SizeOf(Options), 0);
-    Options.dwSize := SizeOf(Options);
-    if TextFlags and DT_CALCRECT <> 0 then
-      Options.dwFlags := Options.dwFlags or DTT_CALCRECT;
-    if PaintOnGlass then
-      Options.dwFlags := Options.dwFlags or DTT_COMPOSITED;
-    Options.dwFlags := Options.dwFlags or DTT_TEXTCOLOR;
-    Options.crText := GetTextColor(DC);
+  try
+    {$IFDEF COMPILER16_UP}
+    if not StyleServices.IsSystemStyle then
+    begin
+      // StyleServices.DrawText sets DTT_CALCRECT in Options if DT_CALCRECT is in Flags.
+      TextFormat := TTextFormatFlags(TextFlags);
+      if PaintOnGlass then
+        Include(TextFormat, TTextFormats.tfComposited);
 
-    try
-      {$IFDEF COMPILER16_UP}
-      if not StyleServices.IsSystemStyle then
-      begin
-        // The Style engine doesn't have DrawThemeTextEx support
-        {$WARNINGS OFF} // ignore "deprecated" warning
-        StyleServices.DrawText(DC, StyleServices.GetElementDetails(tbPushButtonNormal), Text, TextRect, TextFlags, 0);
-        {$WARNINGS ON}
+      FillChar(StyleTextOptions, SizeOf(StyleTextOptions), 0);
+      StyleTextOptions.Flags := [TStyleTextFlag.stfTextColor];
+      StyleTextOptions.TextColor := GetTextColor(DC);
+
+      if StyleServices.DrawText(DC, StyleServices.GetElementDetails(tbPushButtonNormal), Text, TextRect,
+                                TextFormat, StyleTextOptions) then
         Exit;
-      end
-      else
-      {$ENDIF}
-      begin
-        {$IFDEF COMPILER12_UP}
-        with ThemeServices do
-          if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(Text), Length(Text),
-                             TextFlags, TextRect, Options) <> E_NOTIMPL then
-            Exit;
-        {$ELSE}
-        S := Text;
-        with ThemeServices do
-          if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(S), Length(S),
-                             TextFlags, @TextRect, Options) <> E_NOTIMPL then
-            Exit;
-        {$ENDIF COMPILER12_UP}
-      end;
-    except
-      //Sometimes result check is not enough
-      on E:EExternalException do Exit;
-      else raise;
+    end
+    else
+    {$ENDIF}
+    begin
+      FillChar(Options, SizeOf(Options), 0);
+      Options.dwSize := SizeOf(Options);
+      if TextFlags and DT_CALCRECT <> 0 then
+        Options.dwFlags := Options.dwFlags or DTT_CALCRECT;
+      if PaintOnGlass then
+        Options.dwFlags := Options.dwFlags or DTT_COMPOSITED;
+      Options.dwFlags := Options.dwFlags or DTT_TEXTCOLOR;
+      Options.crText := GetTextColor(DC);
+
+      {$IFDEF COMPILER12_UP}
+      with ThemeServices do
+        if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(Text), Length(Text),
+                           TextFlags, TextRect, Options) <> E_NOTIMPL then
+          Exit;
+      {$ELSE}
+      S := Text;
+      with ThemeServices do
+        if DrawThemeTextEx(Theme[teToolBar], DC, TP_BUTTON, TS_NORMAL, PWideChar(S), Length(S),
+                           TextFlags, @TextRect, Options) <> E_NOTIMPL then
+          Exit;
+      {$ENDIF COMPILER12_UP}
     end;
-  end;
+  except
+    //Sometimes result check is not enough
+    on E:EExternalException do Exit;
+    else raise;
+	end;
   {$ENDIF COMPILER11_UP}
   Windows.DrawText(DC, PChar(Text), Length(Text), TextRect, TextFlags);
 end;
